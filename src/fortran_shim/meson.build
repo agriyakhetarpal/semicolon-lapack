@@ -15,7 +15,7 @@ shim_sources = files(
   'shim_auxiliary.c',
 )
 
-libsemilapack_fortran = library('semilapack_fortran',
+libsemilapack_fortran = shared_library('semilapack_fortran',
   shim_sources,
   dependencies: [blas_dep, m_dep],
   link_with: libsemilapack,
