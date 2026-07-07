@@ -23,6 +23,8 @@ shim_kwargs = {
 }
 
 # TODO: drop this branch once Meson supports shared libraries with wasm-ld.
+# See https://github.com/mesonbuild/meson/issues/10187. Meson emits Unix-like
+# linker flags that wasm-ld does not accept.
 if host_machine.system() == 'emscripten'
   libsemilapack_fortran = library('semilapack_fortran', shim_sources, kwargs: shim_kwargs)
 else
