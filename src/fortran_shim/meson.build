@@ -15,13 +15,19 @@ shim_sources = files(
   'shim_auxiliary.c',
 )
 
-libsemilapack_fortran = shared_library('semilapack_fortran',
-  shim_sources,
-  dependencies: [blas_dep, m_dep],
-  link_with: libsemilapack,
-  include_directories: [inc_pub, inc_src],
-  install: true,
-)
+shim_kwargs = {
+  'dependencies': [blas_dep, m_dep],
+  'link_with': libsemilapack,
+  'include_directories': [inc_pub, inc_src],
+  'install': true,
+}
+
+# TODO: drop this branch once Meson supports shared libraries with wasm-ld.
+if host_machine.system() == 'emscripten'
+  libsemilapack_fortran = library('semilapack_fortran', shim_sources, kwargs: shim_kwargs)
+else
+  libsemilapack_fortran = shared_library('semilapack_fortran', shim_sources, kwargs: shim_kwargs)
+endif
 
 pkg.generate(libsemilapack_fortran,
   name: 'semicolon-lapack-fortran',
