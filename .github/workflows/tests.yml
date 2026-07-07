@@ -256,3 +256,86 @@ jobs:
             semilapack.lib ^
             /Fe:consumer_test.exe
           consumer_test.exe
+
+  test-emscripten:
+    name: Test WebAssembly BLIS
+    needs: get_commit_message
+    if: needs.get_commit_message.outputs.run_tests == '1'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      WASM_PREFIX: ${{ github.workspace }}/wasm-prefix
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: ci
+          environment-file: ''
+
+      - name: Install dependencies
+        run: >-
+          conda install -y
+          meson
+          ninja
+          cmake
+          pkg-config
+
+      - name: Set up Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: 5.0.3
+
+      - name: Print environment info
+        run: |
+          echo "=== CPU ==="
+          lscpu | grep -E 'Model name|CPU\(s\)|Thread|Architecture|Vendor'
+          echo ""
+          echo "=== Memory ==="
+          free -h | head -2
+          echo ""
+          echo "=== Emscripten ==="
+          emcc --version | head -1
+          echo ""
+          echo "=== Node ==="
+          node --version
+
+      - name: Build BLIS (CBLAS) for WASM
+        run: |
+          git clone --depth 1 --branch 2.1 https://github.com/flame/blis
+          cd blis
+          git apply "$GITHUB_WORKSPACE/tools/wasm/blis/0001-Compile-BLIS-to-WebAssembly.patch"
+          git apply "$GITHUB_WORKSPACE/tools/wasm/blis/0002-CBLAS-interface-for-crotg-zrotg-zdrot-and-csrot.patch"
+          CC=emcc AR=emar RANLIB=emranlib ./configure \
+            --disable-threading --disable-shared --enable-cblas \
+            --prefix="$WASM_PREFIX" wasm32
+          emmake make -j$(nproc)
+          emmake make install
+
+      - name: Build CMocka 2.0 for WASM
+        run: |
+          git clone --depth 1 --branch cmocka-2.0.0 https://gitlab.com/cmocka/cmocka
+          emcmake cmake -S cmocka -B cmocka/build \
+            -DCMAKE_INSTALL_PREFIX="$WASM_PREFIX" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWITH_EXAMPLES=OFF \
+            -DUNIT_TESTING=OFF
+          cmake --build cmocka/build
+          cmake --install cmocka/build
+
+      - name: Configure
+        # N.B. BLIS installs blis.pc under share/pkgconfig,
+        # but CMocka does so under under lib/pkgconfig.
+        run: |
+          export PKG_CONFIG_PATH="$WASM_PREFIX/lib/pkgconfig:$WASM_PREFIX/share/pkgconfig"
+          meson setup builddir --cross-file emscripten-wasm.ini -Dblas=blis
+
+      - name: Build
+        run: ninja -C builddir
+
+      - name: Test
+        run: meson test -C builddir --print-errorlogs
