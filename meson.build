@@ -56,6 +56,9 @@ else
     '-Wno-higher-precision-for-complex-division',
   ])
 endif
+extra_warnings += cc.get_supported_arguments([
+  '-Wno-complex-component-init',
+])
 add_project_arguments(extra_warnings, language: 'c')
 
 # Silence MSVC _CRT_SECURE_NO_WARNINGS (strncpy, sprintf deprecation warnings)
